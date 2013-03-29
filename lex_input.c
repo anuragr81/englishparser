@@ -1,5 +1,4 @@
-    /* calculator #1 */
-/* [+=\n]      { return *yytext; } */
+
 %{
     #include "y.tab.h"
     void yyerror(char *);
