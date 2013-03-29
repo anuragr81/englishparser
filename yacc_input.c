@@ -1,5 +1,10 @@
+
+
 %{
 #include <stdio.h>
+#include "structures.h"
+
+void processAssignment(char * subject, struct TVerb * , char* object);
 
 struct Message {
  char * input, * output;
@@ -7,11 +12,6 @@ struct Message {
     int yylex(void);
     void yyerror(char *);
 
-typedef enum { PAST=-1,PRESENT=0,FUTURE=1} TENSE;
-
-struct TVerb{
-    TENSE tense;
-};
 
 %}
 
@@ -20,10 +20,14 @@ struct TVerb{
     int iValue;
     char * sValue;
     struct Entity * pEntity;
+    struct TVerb * pVerb;
 };
 
 %token INTEGER
 %token<sValue> NAME
+%type<sValue> subject
+%type<sValue> object
+
 %token BRACKET_OPEN
 %token BRACKET_CLOSE
 %token BRACES_OPEN
@@ -38,7 +42,10 @@ struct TVerb{
 %token VERB_DO_SINGLE_PRES
 %token WHERE
 %type<pEntity> statement
-%type<
+%type<pVerb> verb
+%type<pVerb> s_verb
+%type<pVerb> s_do
+%type<pVerb> s_etre
 
 %%
 
@@ -46,25 +53,24 @@ base :
 base STOP base {
               }
 | statement { printf("statement");
-            }
+            }  | base STOP { printf("statement STOP"); }
 ;
 
 blank : BLANK | blank BLANK
 where   : blank WHERE | WHERE blank | blank WHERE blank
 
-subject: NAME
-object : NAME
-s_etre : VERB_IS_PRES | VERB_IS_PAST
-s_do : VERB_DO_SINGLE_PRES | VERB_DO_SINGLE_PAST
+subject: NAME { $$ = $1; }
+object : NAME { $$ = $1; }
+s_etre : VERB_IS_PRES { $$ = createVerb("is",PRESENT); } | VERB_IS_PAST { $$ = createVerb("is",PAST); }
+s_do : VERB_DO_SINGLE_PRES { $$ = createVerb("do",PRESENT); } | VERB_DO_SINGLE_PAST { $$ = createVerb("do",PAST); }
+s_verb : s_do { $$ = $1; } | s_etre { $$= $1;}
 
-s_verb : s_do | s_etre
+verb: blank s_verb { $$ = $2;} | s_verb blank { $$ = $1; } | s_verb { $$ = $1;} | blank s_verb blank { $$ = $2;}
 
-verb: blank s_verb | s_verb blank| s_verb | blank s_verb blank
+active_voice : subject verb object { processAssignment($1,$2,$3); }
 
-active_voice : subject verb object { printf(" Active VOICE " );}
-
-statement: subject verb object { printf( "verb") ; } |
-    where verb subject { printf("where"); }
+statement: active_voice { printf( "<-- Active Voice -->") ; } |
+    where verb subject { printf("<-- Interrogative -->"); }
 
 %%
 
