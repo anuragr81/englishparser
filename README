@@ -16,3 +16,233 @@ static int  getValue(int red, int green, int blue) {
 		sum += (blue);
 		return sum;
 }
+
+
+
+package appmain;
+
+import java.awt.image.BufferedImage;
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.LinkedList;
+
+import utils.UMatrix;
+
+import javax.imageio.ImageIO;
+
+import org.apache.commons.math3.stat.descriptive.DescriptiveStatistics;
+
+import Jama.Matrix;
+
+public class Run {
+
+	public static void main(String[] args) throws IOException {
+
+		String filename = "";
+		try {
+			filename = "gadha.gif";
+			filename = "gadha_wb.jpg";
+			// filename = "suvichaar.jpg";
+
+			BufferedImage img = ImageIO.read(new File(filename));
+			ImageShow.showImage(processImage(img));
+		} catch (IOException e) {
+			System.out.println("Error in Opening File: " + filename);
+		}
+
+	}
+
+	static int getValue(int red, int green, int blue) {
+		int sum = 0xFF000000;
+		sum += (red << 16);
+		sum += (green << 8);
+		sum += (blue);
+		// System.out.println("Generated RGB Value=" +
+		// Integer.toHexString(sum));
+		return sum;
+	}
+
+	private static BufferedImage processImage(BufferedImage img) {
+
+		int width = img.getWidth();
+		int height = img.getHeight();
+		BufferedImage out = new BufferedImage(width, height,
+				BufferedImage.TYPE_INT_ARGB);
+		// UMatrix m = new UMatrix(width, height);
+		double[][] array = new double[width][height];
+		Matrix m = new Matrix(array);
+
+		for (int i = 0; i < width; ++i) {
+			for (int j = 0; j < height; ++j) {
+
+				int rgb = img.getRGB(i, j); // always returns TYPE_INT_ARGB
+				// System.out.println("RGB Value=" + Integer.toHexString(rgb));
+				int alpha = (rgb >> 24) & 0xFF;
+				int red = (rgb >> 16) & 0xFF;
+				int green = (rgb >> 8) & 0xFF;
+				int blue = (rgb) & 0xFF;
+				// int value = (int) Math.sqrt(red * red + green * green + blue*
+				// blue);
+				int value = (red + green + blue) / 3;
+				int newvalue = getValue(value, value, value);
+				m.set(i, j, newvalue);
+			}
+		}
+
+		// It shouldn't matter whether the image is black-on-white or
+		// white-on-black
+		// but the algorithms would assume its a black on white image.
+
+		Matrix normalMatrix = normalizeMatrix(m);
+		DescriptiveStatistics dd = new DescriptiveStatistics(
+				normalMatrix.getRowPackedCopy());
+		System.out.println("Old Skewness=" + dd.getSkewness());
+
+		Matrix whiteonBlackMatrix = whiteonBlack(normalMatrix);
+		Matrix filteredImage = horizontalFilter(whiteonBlackMatrix);
+		BufferedImage im = imageNormalMatrix(filteredImage);
+
+
+		System.out.println(dumpValues(whiteonBlackMatrix));
+		System.out.println(dumpValues(filteredImage));
+		
+		dd = new DescriptiveStatistics(whiteonBlackMatrix.getRowPackedCopy());
+		System.out.println("New Skewness=" + dd.getSkewness());
+
+		return im;
+	}
+
+	private static Matrix whiteonBlack(Matrix normalMatrix) {
+		Matrix retMat = normalMatrix.copy();
+		retMat = normalMatrix;
+		DescriptiveStatistics dd = new DescriptiveStatistics(
+				retMat.getRowPackedCopy());
+		if (dd.getSkewness() < 0) {
+			retMat = normalizeMatrix(retMat.times(-1));
+		}
+		return retMat;
+	}
+
+	private static BufferedImage imageNormalMatrix(Matrix m) {
+		BufferedImage out = new BufferedImage(m.getRowDimension(),
+				m.getColumnDimension(), BufferedImage.TYPE_INT_ARGB);
+		double maxvalue = maxMatrix(m);
+		double minvalue = minMatrix(m);
+		if (minvalue < 0 || maxvalue > 1) {
+			throw new RuntimeException();
+		}
+
+		for (int i = 0; i < m.getRowDimension(); ++i) {
+			for (int j = 0; j < m.getColumnDimension(); ++j) {
+				// skew the data to right for luminosity
+				int grayvalue = (int) (m.get(i, j) * 0xFF);
+				out.setRGB(i, j, getValue(grayvalue, grayvalue, grayvalue));
+			}
+		}
+		return out;
+	}
+
+	private static String dumpValues(Matrix m) {
+		String outstring = "";
+		String prefix = "";
+		for (int i = 0; i < m.getRowPackedCopy().length; ++i) {
+			outstring = outstring + prefix + m.getRowPackedCopy()[i];
+			prefix = ",";
+		}
+
+		return outstring;
+	}
+
+	private static Matrix normalizeMatrix(Matrix m) {
+		Matrix retMat = m.copy();
+		double min = minMatrix(retMat);
+		if (min < 0) {
+			Matrix minmat = new Matrix(retMat.getRowDimension(),
+					retMat.getColumnDimension(), -min);
+			retMat = retMat.plus(minmat);
+		}
+		double max = maxMatrix(retMat);
+		return retMat.times(1 / max);
+	}
+
+	private static Matrix horizontalFilter(Matrix normalMatrix) {
+		Matrix newm = normalMatrix.copy();
+		double[][] filterArray = { { 0, 1, 0 }, { 0, 1, 0 }, { 0, 1, 0 } }; // vertical
+																			// is
+																			// the
+																			// one
+																			// to
+																			// go
+																			// with
+		Matrix filter = new Matrix(filterArray);
+
+		for (int i = 0; i <= newm.getRowDimension() - 3; i++) {
+			for (int j = 0; j <= newm.getColumnDimension() - 3; ++j) {
+				Matrix submatrix = newm.getMatrix(i, i + 2, j, j + 2);
+				Matrix mul = submatrix.arrayTimes(filter);
+				double value = sumMatrix(mul);
+				newm.set(i, j, value);
+			}
+		}
+
+		newm = normalizeMatrix(newm);
+		return newm;
+	}
+
+	private static double minMatrix(Matrix m) {
+
+		double min = m.get(0, 0);
+		int index_i = 0, index_j = 0;
+		for (int i = 0; i < m.getRowDimension(); ++i) {
+			for (int j = 0; j < m.getColumnDimension(); ++j) {
+				if (m.get(i, j) < min) {
+					min = m.get(i, j);
+					index_i = i;
+					index_j = j;
+				}
+			}
+		}
+
+		System.out.println("(" + index_i + "," + index_j + ")");
+		return min;
+	}
+
+	private static double avgMatrix(Matrix m) {
+		int sum = 0;
+
+		for (int i = 0; i < m.getRowDimension(); ++i) {
+			for (int j = 0; j < m.getColumnDimension(); ++j) {
+				sum += m.get(i, j);
+			}
+		}
+		return (int) ((float) sum / (float) (m.getRowDimension() * m
+				.getColumnDimension()));
+	}
+
+	private static double maxMatrix(Matrix m) {
+		double max = m.get(0, 0);
+		for (int i = 0; i < m.getRowDimension(); ++i) {
+			for (int j = 0; j < m.getColumnDimension(); ++j) {
+				if (m.get(i, j) > max) {
+					max = m.get(i, j);
+				}
+			}
+		}
+		return max;
+	}
+
+	private static double sumMatrix(Matrix m) {
+		int sum = 0;
+
+		for (int i = 0; i < m.getRowDimension(); ++i) {
+			for (int j = 0; j < m.getColumnDimension(); ++j) {
+				sum += m.get(i, j);
+			}
+		}
+		return sum;
+	}
+}
