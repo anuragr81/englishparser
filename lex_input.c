@@ -8,6 +8,7 @@
 
 is { return VERB_IS_PRES;}
 were { return VERB_IS_PAST; }
+was { return VERB_IS_PAST; }
 do { return VERB_DO_SINGLE_PRES;}
 did { return VERB_DO_SINGLE_PAST;}
 
