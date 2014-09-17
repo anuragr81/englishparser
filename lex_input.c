@@ -6,6 +6,7 @@
 
 %%
 
+am { return VERB_IS_PRES; }
 is { return VERB_IS_PRES;}
 were { return VERB_IS_PAST; }
 was { return VERB_IS_PAST; }

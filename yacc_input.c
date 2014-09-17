@@ -6,7 +6,7 @@
 
 void processAssignment(char * subject, struct TVerb * tverb, char* object){
    printf("Subject=\"%s\"",subject);
-   printf("Verb=\"%s\"",tverb->name);
+   printf("Verb=\"%s Tense=%d\"",tverb->name,(int)tverb->tense);
    printf("Object=\"%s\"",object);
 }
 
@@ -47,9 +47,14 @@ struct Message {
 %token WHERE
 %type<pEntity> statement
 %type<pVerb> verb
-%type<pVerb> s_verb
-%type<pVerb> s_do
-%type<pVerb> s_etre
+%type<pVerb> s_singular_verb
+%type<pVerb> singular_verb
+%type<pVerb> s_plural_verb
+%type<pVerb> plural_verb
+%type<pVerb> s_singular_do
+%type<pVerb> s_plural_do
+%type<pVerb> s_singular_etre
+%type<pVerb> s_plural_etre
 
 %%
 
@@ -63,19 +68,37 @@ base STOP base {
 blank : BLANK | blank BLANK
 where   : blank WHERE | WHERE blank | blank WHERE blank
 
-subject: NAME { $$ = $1; } | blank NAME { $$=$2; } | NAME blank { $$=$1; } | blank NAME blank { $$=$2; }
+name:  NAME { $$ = $1; } | blank NAME { $$=$2; } | NAME blank { $$=$1; } | blank NAME blank { $$=$2; }
+singular_subject: name 
+
+plural_subject: plural_name 
 
 object : NAME { $$ = $1; }
-s_etre : VERB_IS_PRES { $$ = createVerb("is",PRESENT); } | VERB_IS_PAST { $$ = createVerb("is",PAST); }
-s_do : VERB_DO_SINGLE_PRES { $$ = createVerb("do",PRESENT); } | VERB_DO_SINGLE_PAST { $$ = createVerb("do",PAST); }
-s_verb : s_do { $$ = $1; } | s_etre { $$= $1;} 
 
-verb: blank s_verb { $$ = $2;} | s_verb blank { $$ = $1; } | s_verb { $$ = $1;} | blank s_verb blank { $$ = $2;}
+s_singular_etre : VERB_IS_PRES { $$ = createVerb("is",PRESENT); } | VERB_IS_PAST { $$ = createVerb("is",PAST); }
+s_singular_do : VERB_DO_SINGLE_PRES { $$ = createVerb("do",PRESENT); } | VERB_DO_SINGLE_PAST { $$ = createVerb("do",PAST); }
 
-active_voice : subject verb object { processAssignment($1,$2,$3); }
+s_plural_etre : VERB_IS_PLURAL_PRES { $$ = createVerb("is",PRESENT); } | VERB_IS_PLURAL_PAST { $$ = createVerb("is",PAST); }
+s_plural_do : VERB_DO_PLURAL_PRES { $$ = createVerb("do",PRESENT); } | VERB_DO_PLURAL_PAST { $$ = createVerb("do",PAST); }
+
+s_singular_verb : s_singular_do { $$ = $1; } | s_singular_etre { $$= $1;} 
+s_plural_verb : s_plural_do { $$ = $1; } | s_plural_etre { $$= $1;} 
+
+
+singular_verb: blank s_singular_verb { $$ = $2;} 
+               | s_singular_verb blank { $$ = $1; } 
+               | s_singular_verb { $$ = $1;}
+               | blank s_singular_verb blank { $$ = $2;}
+
+plural_verb: blank s_plural_verb { $$ = $2;} | s_plural_verb blank { $$ = $1; } | s_plural_verb { $$ = $1;} | blank s_plural_verb blank { $$ = $2;}
+
+active_voice : 
+   singular_subject singular_verb object { processAssignment($1,$2,$3); } |
+   plural_subject plural_verb object { processAssignment($1,$2,$3); }
 
 statement: active_voice { printf( "<-- Active Voice -->") ; } |
-    where verb subject { printf("<-- Interrogative -->"); }
+    where verb singlular_subject { printf("<-- Interrogative -->"); } |
+    where verb plural_subject { printf("<-- Interrogative -->"); }
 
 %%
 
